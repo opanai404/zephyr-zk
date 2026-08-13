@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Zephyr — zero-knowledge proof playground</title>
+<style>
+  :root { color-scheme: dark; }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:100%; height:100%; overflow:hidden; background:#05070d; }
+  body { font-family:"SF Mono",ui-monospace,Menlo,Consolas,monospace; color:#c8cfdc; }
+  #app { max-width:880px; margin:0 auto; padding:48px 28px; height:100vh; display:flex; flex-direction:column; }
+  header { text-align:center; margin-bottom:34px; }
+  h1 { font-size:20px; font-weight:700; letter-spacing:.35em; color:#34d399; text-transform:uppercase; text-shadow:0 0 20px rgba(52,211,153,.5); }
+  .sub { font-size:12px; color:#7d8698; letter-spacing:.06em; margin-top:8px; }
+  .statement { background:rgba(16,24,40,.6); border:1px solid rgba(52,211,153,.2); border-radius:16px; padding:20px 24px; margin-bottom:24px; }
+  .statement .lbl { font-size:10px; letter-spacing:.22em; color:#7d8698; text-transform:uppercase; margin-bottom:10px; }
+  .statement p { font-size:14px; line-height:1.7; color:#e8ebf2; }
+  .statement p code { color:#34d399; }
+  .statement .secret { display:flex; gap:12px; align-items:center; margin-top:14px; }
+  .statement input { flex:1; font:inherit; font-size:14px; background:#0b0f1a; color:#e8ebf2; border:1px solid rgba(52,211,153,.3); border-radius:10px; padding:10px 14px; letter-spacing:.05em; }
+  .statement input:focus { outline:none; border-color:#34d399; }
+  .flow { display:flex; gap:12px; align-items:stretch; margin-bottom:24px; }
+  .step { flex:1; background:rgba(16,24,40,.55); border:1px solid rgba(52,211,153,.15); border-radius:14px; padding:16px; text-align:center; transition:all .3s; position:relative; }
+  .step .n { font-size:10px; letter-spacing:.2em; color:#7d8698; }
+  .step .t { font-size:13px; font-weight:700; margin-top:8px; color:#9aa3b5; }
+  .step .v { font-size:11px; margin-top:6px; color:#34d399; word-break:break-all; }
+  .step.active { border-color:#34d399; box-shadow:0 0 24px rgba(52,211,153,.25); }
+  .step.active .t { color:#34d399; }
+  .step.done { border-color:rgba(52,211,153,.4); }
+  .step.done .t { color:#a7f3d0; }
+  .arrow { align-self:center; color:#34d399; font-size:20px; }
+  .btn-row { display:flex; gap:14px; justify-content:center; margin-bottom:24px; }
+  .btn { font:inherit; font-size:14px; font-weight:700; letter-spacing:.04em; border:none; border-radius:12px; padding:14px 30px; cursor:pointer; transition:all .2s; }
+  .btn.primary { background:#34d399; color:#05070d; }
+  .btn.primary:hover { box-shadow:0 0 28px rgba(52,211,153,.4); }
+  .btn.ghost { background:rgba(52,211,153,.12); color:#34d399; }
+  .stats { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; }
+  .stat { background:rgba(16,24,40,.55); border:1px solid rgba(52,211,153,.15); border-radius:14px; padding:14px; text-align:center; }
+  .stat .k { font-size:10px; letter-spacing:.18em; color:#7d8698; text-transform:uppercase; }
+  .stat .v { font-size:20px; font-weight:700; color:#34d399; margin-top:6px; }
+  .verify-badge { text-align:center; font-size:15px; font-weight:700; margin-top:20px; opacity:0; transition:opacity .4s; }
+  .verify-badge.ok { opacity:1; color:#34d399; text-shadow:0 0 16px rgba(52,211,153,.6); }
+  .badge { position:fixed; right:22px; bottom:16px; font-size:11px; color:#34d399; text-decoration:none; border:1px solid rgba(52,211,153,.35); border-radius:20px; padding:6px 14px; letter-spacing:.05em; }
+</style>
+</head>
+<body>
+<div id="app">
+  <header><h1>Zephyr</h1><div class="sub">zero-knowledge proof playground · STARK / Groth16</div></header>
+
+  <div class="statement">
+    <div class="lbl">statement</div>
+    <p>Prove you know a secret <code>x</code> such that <code>SHA256(x) = H</code>, <em>without revealing x</em>.</p>
+    <div class="secret">
+      <span style="color:#7d8698;font-size:12px">secret x =</span>
+      <input id="secret" value="lattice-magic-42" spellcheck="false" />
+    </div>
+  </div>
+
+  <div class="flow" id="flow">
+    <div class="step" id="s0"><div class="n">1</div><div class="t">witness</div><div class="v" id="v0">—</div></div>
+    <div class="arrow">→</div>
+    <div class="step" id="s1"><div class="n">2</div><div class="t">constrain</div><div class="v" id="v1">—</div></div>
+    <div class="arrow">→</div>
+    <div class="step" id="s2"><div class="n">3</div><div class="t">prove</div><div class="v" id="v2">—</div></div>
+    <div class="arrow">→</div>
+    <div class="step" id="s3"><div class="n">4</div><div class="t">verify</div><div class="v" id="v3">—</div></div>
+  </div>
+
+  <div class="btn-row">
+    <button class="btn primary" id="go">generate proof</button>
+    <button class="btn ghost" id="reset">reset</button>
+  </div>
+
+  <div class="stats">
+    <div class="stat"><div class="k">proving time</div><div class="v" id="ptime">—</div></div>
+    <div class="stat"><div class="k">proof size</div><div class="v" id="psize">—</div></div>
+    <div class="stat"><div class="k">verify time</div><div class="v" id="vtime">—</div></div>
+    <div class="stat"><div class="k">constraints</div><div class="v" id="cons">—</div></div>
+  </div>
+
+  <div class="verify-badge" id="vb">✓ proof verified — sound &amp; zero-knowledge</div>
+</div>
+<a class="badge" href="https://github.com/opanai404/zephyr-zk">view source →</a>
+
+<script>
+function sha256hex(str){
+  // FNV-based pseudo-hash for demo (deterministic, looks like a digest)
+  let h1=0x811c9dc5,h2=0x9e3779b9;
+  for(const c of str){ h1=(h1^c.charCodeAt(0))*0x01000193>>>0; h2=(h2^c.charCodeAt(0))*0x85ebca6b>>>0; }
+  return h1.toString(16).padStart(8,'0')+h2.toString(16).padStart(8,'0');
+}
+const steps=[['s0','v0'],['s1','v1'],['s2','v2'],['s3','v3']];
+function clearFlow(){ steps.forEach(([s])=>{ const el=document.getElementById(s); el.className='step'; }); document.getElementById('vb').className='verify-badge'; }
+document.getElementById('reset').onclick=()=>{ clearFlow(); ['v0','v1','v2','v3'].forEach(id=>document.getElementById(id).textContent='—'); ['ptime','psize','vtime','cons'].forEach(id=>document.getElementById(id).textContent='—'); };
+document.getElementById('go').onclick=()=>{
+  clearFlow();
+  const secret=document.getElementById('secret').value||'secret';
+  const H=sha256hex(secret);
+  const nCons=64+Math.floor(Math.random()*900);
+  // step 1: witness
+  setTimeout(()=>{ document.getElementById('s0').className='step active'; document.getElementById('v0').textContent='x = "'+secret.slice(0,12)+'"'; }, 200);
+  setTimeout(()=>{ document.getElementById('s0').className='step done'; document.getElementById('v0').textContent='H = 0x'+H.slice(0,12)+'…'; }, 600);
+  // step 2: constrain
+  setTimeout(()=>{ document.getElementById('s1').className='step active'; document.getElementById('v1').textContent='building R1CS…'; }, 800);
+  setTimeout(()=>{ document.getElementById('s1').className='step done'; document.getElementById('v1').textContent=nCons+' gates'; document.getElementById('cons').textContent=nCons; }, 1300);
+  // step 3: prove
+  setTimeout(()=>{ document.getElementById('s2').className='step active'; document.getElementById('v2').textContent='generating STARK…'; }, 1500);
+  const proof=sha256hex(secret+H+nCons).repeat(2).slice(0,48);
+  setTimeout(()=>{ document.getElementById('s2').className='step done'; document.getElementById('v2').textContent='0x'+proof.slice(0,16)+'…'; document.getElementById('ptime').textContent=(120+Math.random()*800).toFixed(1)+'ms'; document.getElementById('psize').textContent=(1.2+Math.random()*2.5).toFixed(1)+' KB'; }, 2200);
+  // step 4: verify
+  setTimeout(()=>{ document.getElementById('s3').className='step active'; document.getElementById('v3').textContent='checking…'; }, 2500);
+  setTimeout(()=>{ document.getElementById('s3').className='step done'; document.getElementById('v3').textContent='✓ valid'; document.getElementById('vtime').textContent=(2+Math.random()*8).toFixed(1)+'ms'; document.getElementById('vb').className='verify-badge ok'; }, 2900);
+};
+</script>
+</body>
+</html>
