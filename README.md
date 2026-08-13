@@ -10,6 +10,7 @@
 
 **Zero-knowledge circuit toolkit with pluggable backends**
 
+[![Live demo](https://img.shields.io/badge/live_demo-proof_playground-34D399?style=flat&logoColor=white)](https://opanai404.github.io/zephyr-zk/)
 [![License MIT](https://img.shields.io/badge/license-MIT-34D399?style=flat&logoColor=white)](LICENSE)
 [![Version 0.1.0](https://img.shields.io/badge/version-0.1.0-34D399?style=flat&logoColor=white)](CHANGELOG.md)
 [![Rust 1.90+](https://img.shields.io/badge/Rust-1.90%2B-34D399?style=flat&logo=rust&logoColor=white)](Cargo.toml)
