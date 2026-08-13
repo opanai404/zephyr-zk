@@ -1,0 +1,15 @@
+<svg width="720" height="160" viewBox="0 0 720 160" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Zephyr">
+  <defs>
+    <linearGradient id="g" x1="40" y1="30" x2="120" y2="130" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#34D399"/><stop offset="1" stop-color="#0D9488"/>
+    </linearGradient>
+  </defs>
+  <rect x="40" y="40" width="80" height="80" rx="22" fill="#101828" stroke="url(#g)" stroke-width="2"/>
+  <path d="M56 108 L80 84 L104 108 Z" fill="none" stroke="#34D399" stroke-width="2.5" stroke-linejoin="round"/>
+  <rect x="52" y="108" width="10" height="7" rx="2" fill="#34D399"/>
+  <rect x="74" y="108" width="10" height="7" rx="2" fill="#34D399" fill-opacity="0.55"/>
+  <rect x="96" y="108" width="10" height="7" rx="2" fill="#34D399" fill-opacity="0.3"/>
+  <circle cx="80" cy="66" r="6" fill="#34D399"/>
+  <text x="150" y="88" fill="#F8FAFC" font-family="Inter, -apple-system, 'Segoe UI', sans-serif" font-size="44" font-weight="760" letter-spacing="2">ZEPHYR</text>
+  <text x="152" y="118" fill="#8B93A7" font-family="Inter, -apple-system, 'Segoe UI', sans-serif" font-size="16">zero-knowledge circuit toolkit</text>
+</svg>
