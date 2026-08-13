@@ -10,10 +10,8 @@
 
 **Zero-knowledge circuit toolkit with pluggable backends**
 
-[![CI build](https://img.shields.io/github/actions/workflow/status/opanai404/zephyr-zk/ci.yml?branch=main&style=flat&logo=github&logoColor=white&label=CI%20build&color=34D399)](https://github.com/opanai404/zephyr-zk/actions/workflows/ci.yml)
 [![License MIT](https://img.shields.io/badge/license-MIT-34D399?style=flat&logoColor=white)](LICENSE)
 [![Version 0.1.0](https://img.shields.io/badge/version-0.1.0-34D399?style=flat&logoColor=white)](CHANGELOG.md)
-[![Stars](https://img.shields.io/github/stars/opanai404/zephyr-zk?style=flat&logo=github&logoColor=white&label=stars&color=34D399)](https://github.com/opanai404/zephyr-zk)
 [![Rust 1.90+](https://img.shields.io/badge/Rust-1.90%2B-34D399?style=flat&logo=rust&logoColor=white)](Cargo.toml)
 [![Zero-Knowledge](https://img.shields.io/badge/zero--knowledge-STARK%20%C2%B7%20Groth16-34D399?style=flat&logoColor=white)](docs/architecture.md)
 
