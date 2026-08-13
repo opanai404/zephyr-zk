@@ -7,7 +7,7 @@ backend code, please report it privately and responsibly.
 ## Reporting a vulnerability
 
 **Do not open a public issue.** Instead, email the maintainer at
-`security@zephyr-zk.dev` (or, if you have one, open a private advisory
+`security@hrniu.dev` (or, if you have one, open a private advisory
 via the GitHub "Security" tab on the repository).
 
 Include, if possible:

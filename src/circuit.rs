@@ -167,15 +167,17 @@ impl<F: PrimeField> Circuit<F> {
         if witness.len() != self.num_variables {
             return Err(Error::InvalidWitness);
         }
-        let mut public = Vec::with_capacity(self.public_inputs.len());
-        let mut private = Vec::with_capacity(self.num_variables);
-        for (i, v) in witness.iter().enumerate() {
-            if self.public_inputs.contains(&i) {
-                public.push(*v);
-            } else {
-                private.push(*v);
-            }
+        let public: Vec<F> = self.public_inputs.iter().map(|&var| witness[var]).collect();
+        let mut is_public = vec![false; self.num_variables];
+        for &var in &self.public_inputs {
+            is_public[var] = true;
         }
+        let private: Vec<F> = witness
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| !is_public[*i])
+            .map(|(_, v)| *v)
+            .collect();
         Ok((public, private))
     }
 

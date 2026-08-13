@@ -104,8 +104,7 @@ pub fn add<F: PrimeField>(b: &mut CircuitBuilder<F>, curve: Curve<F>, p: Point, 
 pub fn double<F: PrimeField>(b: &mut CircuitBuilder<F>, curve: Curve<F>, p: Point, label: &str) -> Result<Point, Error> {
     // λ = (3·x_p² + a) / (2·y_p)
     let x_sq = b.mul(p.x, p.x, &format!("{label}.x²"));
-    let three = b.constant(F::from(3u64));
-    let num = b.add(b.scale(x_sq, three, &format!("{label}.3x²")), b.constant(curve.a), &format!("{label}.3x²+a"));
+    let num = b.add(b.scale(x_sq, F::from(3u64), &format!("{label}.3x²")), b.constant(curve.a), &format!("{label}.3x²+a"));
     let two = b.constant(F::from(2u64));
     let den = b.mul(two, p.y, &format!("{label}.2y"));
     let den_inv = invert(b, den, label);

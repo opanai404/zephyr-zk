@@ -15,10 +15,12 @@ trim_trailing_whitespace = false
 
 [*.yml]
 [*.yaml]
-[Makefile]
 [*.toml]
 indent_style = space
 indent_size = 4
+
+[Makefile]
+indent_style = tab
 
 [Dockerfile]
 indent_style = space

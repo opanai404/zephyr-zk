@@ -9,7 +9,7 @@ description = "Zero-knowledge circuit toolkit with pluggable backends"
 keywords = ["zero-knowledge", "zkp", "stark", "groth16", "circuit"]
 categories = ["cryptography", "mathematics"]
 readme = "README.md"
-repository = "https://github.com/hrniu/zephyr-zk"
+repository = "https://github.com/opanai404/zephyr-zk"
 
 [dependencies]
 # --- field arithmetic -------------------------------------------------------

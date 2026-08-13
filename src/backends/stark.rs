@@ -40,7 +40,7 @@ use crate::circuit::Circuit;
 use crate::error::Error;
 use crate::field::{sample, to_bytes, Fp};
 use ark_ff::{FftField, Field, One, Zero};
-use ark_poly::{EvaluationDomain, GeneralEvaluationDomain};
+use ark_poly::{DensePolynomial, EvaluationDomain, GeneralEvaluationDomain};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::collections::BTreeSet;
 use ark_std::vec::Vec;
@@ -104,6 +104,13 @@ fn hash_leaf(x: Fp) -> Digest {
     h.finalize().to_vec()
 }
 
+fn hash_leaf_pair(fx: Fp, fmx: Fp) -> Digest {
+    let mut h = Sha256::new();
+    h.update(to_bytes(fx));
+    h.update(to_bytes(fmx));
+    h.finalize().to_vec()
+}
+
 fn hash_node(l: &Digest, r: &Digest) -> Digest {
     let mut h = Sha256::new();
     h.update(l);
@@ -116,6 +123,29 @@ fn hash_node(l: &Digest, r: &Digest) -> Digest {
 /// `(root, levels)` where `levels[0]` holds the leaf hashes.
 fn merkle(leaves: &[Fp]) -> (Digest, Vec<Vec<Digest>>) {
     let mut level: Vec<Digest> = leaves.iter().map(|l| hash_leaf(*l)).collect();
+    while !level.len().is_power_of_two() {
+        let last = level.last().unwrap().clone();
+        level.push(last);
+    }
+    let mut tree = vec![level.clone()];
+    while level.len() > 1 {
+        level = level
+            .chunks(2)
+            .map(|pair| hash_node(&pair[0], &pair[1]))
+            .collect();
+        tree.push(level.clone());
+    }
+    (level[0].clone(), tree)
+}
+
+/// Build a balanced Merkle tree over `(f(x), f(−x))` pair-leaves: leaf
+/// `i` commits both `evals[i]` and its negated-domain partner
+/// `evals[i + len/2]`. The tree has half as many leaves as `evals`.
+fn merkle_pairs(evals: &[Fp]) -> (Digest, Vec<Vec<Digest>>) {
+    let half = evals.len() / 2;
+    let mut level: Vec<Digest> = (0..half)
+        .map(|i| hash_leaf_pair(evals[i], evals[i + half]))
+        .collect();
     while !level.len().is_power_of_two() {
         let last = level.last().unwrap().clone();
         level.push(last);
@@ -154,12 +184,25 @@ fn recompute_root(leaf: Fp, idx: usize, path: &[Digest]) -> Digest {
     h
 }
 
+/// Recompute a root from a `(f(x), f(−x))` pair-leaf, its path, and its
+/// index, so the verifier authenticates both halves of the fold.
+fn recompute_root_pair(fx: Fp, fmx: Fp, idx: usize, path: &[Digest]) -> Digest {
+    let mut h = hash_leaf_pair(fx, fmx);
+    let mut idx = idx;
+    for node in path {
+        h = if idx % 2 == 0 { hash_node(&h, node) } else { hash_node(node, &h) };
+        idx /= 2;
+    }
+    h
+}
+
 // ---------------------------------------------------------------------------
 // FRI low-degree testing
 // ---------------------------------------------------------------------------
 
 /// One FRI query: the `(f(x), f(−x))` pair at the positive index
-/// `index` for every folding round, plus the Merkle path of `f(x)`.
+/// `index` for every folding round, plus the Merkle path of the
+/// `(f(x), f(−x))` pair leaf.
 ///
 /// Keeping both halves of the `±x` pair lets the verifier re-run the
 /// fold without re-deriving the domain: `x = ω_{M_r}^{index}` in round
@@ -169,7 +212,7 @@ pub struct FriQuery {
     /// Positive half-index, constant across rounds (`0 <= index <
     /// M_last / 2`).
     pub index: usize,
-    /// `(f(x), f(−x), path_of_f(x))` per round.
+    /// `(f(x), f(−x), path_of_pair_leaf)` per round.
     pub openings: Vec<(Fp, Fp, Vec<Digest>)>,
 }
 
@@ -207,7 +250,7 @@ fn fri_prove(evals: &[Fp], alpha_seed: &[u8], rounds: usize, num_queries: usize)
     assert!(evals.len().is_power_of_two(), "FRI domain must be a power of two");
     assert!(rounds > 0 && rounds < evals.len().ilog2(), "rounds must collapse layers");
 
-    let (root, tree) = merkle(evals);
+    let (root, tree) = merkle_pairs(evals);
     let mut commitments = vec![root];
     let mut alphas = Vec::with_capacity(rounds);
     let mut layers = vec![tree];
@@ -218,22 +261,23 @@ fn fri_prove(evals: &[Fp], alpha_seed: &[u8], rounds: usize, num_queries: usize)
         let alpha = sample(alpha_seed);
         alphas.push(alpha);
         let half = size / 2;
-        let omega = Fp::get_root_of_unity(size as u64);
+        let omega = Fp::get_root_of_unity(size as u64).unwrap();
         let mut folded = Vec::with_capacity(half);
         for i in 0..half {
             let x = omega.pow([i as u64, 0]);
             folded.push(fold_pair(current[i], current[i + half], x, alpha));
         }
-        let (r, t) = merkle(&folded);
+        let (r, t) = merkle_pairs(&folded);
         commitments.push(r);
         layers.push(t);
         current = folded;
         size = half;
     }
 
-    // Queries live in the first half of the first layer, where the
-    // positive index remains valid through every round.
-    let q_limit = (evals.len() / 2usize.pow(rounds as u32)).min(num_queries);
+    // Queries live in the first half of the final layer, where the
+    // positive index remains a valid fold input through every round.
+    let final_size = evals.len() / 2usize.pow(rounds as u32);
+    let q_limit = (final_size / 2).min(num_queries);
     let mut queries = Vec::with_capacity(q_limit);
     for p in 0..q_limit {
         let mut openings = Vec::with_capacity(rounds + 1);
@@ -241,7 +285,7 @@ fn fri_prove(evals: &[Fp], alpha_seed: &[u8], rounds: usize, num_queries: usize)
         let mut dom_size = evals.len();
         for round in 0..=rounds {
             let half = dom_size / 2;
-            let omega = Fp::get_root_of_unity(dom_size as u64);
+            let omega = Fp::get_root_of_unity(dom_size as u64).unwrap();
             let x = omega.pow([p as u64, 0]);
             openings.push((
                 layer[p],
@@ -263,7 +307,7 @@ fn fri_prove(evals: &[Fp], alpha_seed: &[u8], rounds: usize, num_queries: usize)
 /// Fold a whole layer once (helper shared with the prover).
 fn folded_layer(layer: &[Fp], alpha: &Fp) -> Vec<Fp> {
     let half = layer.len() / 2;
-    let omega = Fp::get_root_of_unity(layer.len() as u64);
+    let omega = Fp::get_root_of_unity(layer.len() as u64).unwrap();
     (0..half)
         .map(|i| {
             let x = omega.pow([i as u64, 0]);
@@ -282,8 +326,8 @@ fn fri_verify(proof: &FriProof) -> Result<bool, Error> {
         if q.openings.len() != proof.commitments.len() {
             return Ok(false);
         }
-        for (round, (fx, _fmx, path)) in q.openings.iter().enumerate() {
-            if recompute_root(*fx, q.index, path) != proof.commitments[round] {
+        for (round, (fx, fmx, path)) in q.openings.iter().enumerate() {
+            if recompute_root_pair(*fx, *fmx, q.index, path) != proof.commitments[round] {
                 return Ok(false);
             }
         }
@@ -293,7 +337,7 @@ fn fri_verify(proof: &FriProof) -> Result<bool, Error> {
         for (round, alpha) in proof.alphas.iter().enumerate() {
             let (fx, fmx, _) = q.openings[round];
             let size = 2usize.pow((proof.alphas.len() - round) as u32) * proof.final_layer.len();
-            let omega = Fp::get_root_of_unity(size as u64);
+            let omega = Fp::get_root_of_unity(size as u64).unwrap();
             let x = omega.pow([q.index as u64, 0]);
             value = fold_pair(fx, fmx, x, *alpha);
         }
@@ -346,7 +390,7 @@ impl Prover<Fp> for StarkBackend {
         let trace_domain = GeneralEvaluationDomain::<Fp>::new(n)
             .ok_or(Error::InvalidTraceSize { len: n })?;
         let omega = trace_domain.group_gen();
-        let trace_poly = trace_domain.ifft(&padded);
+        let trace_poly = DensePolynomial::from_coefficients_vec(trace_domain.ifft(&padded));
 
         // Commit the trace on a domain large enough to open f at
         // r·ωʲ for any support offset j without aliasing.
@@ -383,7 +427,7 @@ impl Prover<Fp> for StarkBackend {
             let z = x.pow([n as u64, 0]) - Fp::ONE;
             h_evals.push((a * b - c) * z.inverse().unwrap());
         }
-        let h_poly = coset_domain.ifft(&h_evals);
+        let h_poly = DensePolynomial::from_coefficients_vec(coset_domain.ifft(&h_evals));
 
         // --- FRI over H on the blowup domain --------------------------------
         let fri_len = n * self.config.blowup;
@@ -401,7 +445,7 @@ impl Prover<Fp> for StarkBackend {
         // r = ω_{fri_len}^{p₀} is a root of unity of the FRI domain, so
         // H(r) = the queried leaf itself; the verifier reuses it.
         let p0 = fri.queries.first().map(|q| q.index).unwrap_or(0);
-        let r = Fp::get_root_of_unity(fri_len as u64).pow([p0 as u64, 0]);
+        let r = Fp::get_root_of_unity(fri_len as u64).unwrap().pow([p0 as u64, 0]);
 
         let support = support_vars(circuit);
         let trace_openings = support
@@ -448,7 +492,7 @@ impl Verifier<Fp> for StarkBackend {
         let omega = GeneralEvaluationDomain::<Fp>::new(n).unwrap().group_gen();
         let fri_len = n * self.config.blowup;
         let p0 = payload.fri.queries.first().map(|q| q.index).unwrap_or(0);
-        let r = Fp::get_root_of_unity(fri_len as u64).pow([p0 as u64, 0]);
+        let r = Fp::get_root_of_unity(fri_len as u64).unwrap().pow([p0 as u64, 0]);
         let h_r = payload.fri.queries.first().and_then(|q| q.openings.first()).map(|(fx, _, _)| *fx);
 
         let support = support_vars(circuit);
