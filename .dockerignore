@@ -1,0 +1,11 @@
+target
+**/target
+pkg
+.git
+.github
+.gitignore
+.idea
+.vscode
+*.swp
+*.log
+docs/_build
